@@ -254,7 +254,9 @@ long double ** runSim(long double ** particles, int numFrames) {
 
     while (frameCount < numFrames) {
         // get neighbor lists 
+        
         array<vector<int>,NUM_PARTICLES> neighbors = getNeighborsSimple(particles);
+        cout << "neighbors done" << endl;
         
         for (int i = 0; i < 10; ++i) {
             // move all the particles via brownian motion
@@ -268,6 +270,7 @@ long double ** runSim(long double ** particles, int numFrames) {
             // do collision resolution
             particles = resolveCollisions(particles, neighbors);
         }
+        cout << "movement and collisions done" << endl;
 
         // report the frame as done
         frameCount++;
