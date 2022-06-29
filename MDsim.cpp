@@ -1,9 +1,12 @@
+#define _USE_MATH_DEFINES
+
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <math.h>
 #include <random>
 #include <vector>
 #include <array>
@@ -259,7 +262,7 @@ long double ** runSim(long double ** particles, int numFrames) {
                 for (int n = 0; n < NUM_COLUMNS; ++n) {
                     long double test = norm(urbg)*SCALING_FACTOR;
                     particles[m][n] += test;
-                    cout << test <<endl;
+                    // cout << test <<endl;
                 }
             }
             // do collision resolution
@@ -280,7 +283,7 @@ int main() {
     long double** particles = importData("initial_particles.txt");
 
     // run the sim
-    particles = runSim(particles, 1);
+    particles = runSim(particles, 10);
 
     // export particle positions
     exportData(particles, "test.txt");
