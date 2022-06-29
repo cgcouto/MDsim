@@ -128,38 +128,34 @@ array<vector<int>,NUM_PARTICLES> getNeighborsSimple(long double** particles) {
     array<vector<int>,NUM_PARTICLES> neighbors;
     // loop through each row in neighbors and check distances
     for (int i = 0; i < NUM_PARTICLES; ++i) {
-        long double currentParticle [2] = {particles[i][0], particles[i][1]};
-
-        // form the relevant delta around currentParticle
-        long double xMin = currentParticle[0]-PARTICLE_DIAM*NEIGHB_THRESHOLD;
-        long double xMax = currentParticle[0]+PARTICLE_DIAM*NEIGHB_THRESHOLD;
-        long double yMin = currentParticle[1]-PARTICLE_DIAM*NEIGHB_THRESHOLD;
-        long double yMax = currentParticle[1]+PARTICLE_DIAM*NEIGHB_THRESHOLD;
-
-        if (xMin < 0) {
-            xMin += WIDTH;
-        }
-
-        if (xMax > WIDTH) {
-            xMax -= WIDTH;
-        }
-
-        if (yMin < 0) {
-            yMin += HEIGHT;
-        }
-
-        if (yMax > HEIGHT) {
-            yMax -= HEIGHT;
-        }
-
         for (int j = 0; j < NUM_PARTICLES; ++j) {
             if (i != j) {
+                long double currentParticle [2] = {particles[i][0], particles[i][1]};
                 long double testParticle [2] = {particles[j][0], particles[j][1]};
-                if (testParticle[0] > xMin && testParticle[0] < xMax && testParticle[1] > yMin && testParticle[1] < yMax) {
+
+                // adjust particles based on wraparound boundary conditions
+                if (testParticle[0] < PARTICLE_DIAM*NEIGHB_THRESHOLD && currentParticle[0] > WIDTH-PARTICLE_DIAM*NEIGHB_THRESHOLD ) {
+                    testParticle[0] += WIDTH;
+                } else if (testParticle[0] > WIDTH-PARTICLE_DIAM*NEIGHB_THRESHOLD  && currentParticle[0] < PARTICLE_DIAM*NEIGHB_THRESHOLD ) {
+                    testParticle[0] -= WIDTH;
+                }
+
+                if (testParticle[1] < PARTICLE_DIAM*NEIGHB_THRESHOLD  && currentParticle[1] > HEIGHT-PARTICLE_DIAM*NEIGHB_THRESHOLD ) {
+                    testParticle[1] += HEIGHT;
+                } else if (testParticle[1] > HEIGHT-PARTICLE_DIAM*NEIGHB_THRESHOLD  && currentParticle[1] < PARTICLE_DIAM*NEIGHB_THRESHOLD ) {
+                    testParticle[1] -= HEIGHT;
+                }
+
+                long double dist = sqrt(pow(currentParticle[0]-testParticle[0],2) + pow(currentParticle[1]-testParticle[1],2));
+
+                if (dist < PARTICLE_DIAM*NEIGHB_THRESHOLD) {
                     neighbors[i].push_back(j);
                 }
+                    
             }
+    
         }
+        cout << neighbors[i].size() << endl;
         // if (neighbors[i].size() == 0) {
         //     cout << particles[i][0] << " " << particles[i][1] << endl;
         // }
