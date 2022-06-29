@@ -27,13 +27,15 @@
 using namespace std; // so we don't have to put std:: in front of certain things
 
 
-// - - - - - IMPORTANT CONSTANTS - - - - -
+// - - - - - SIM PARAMETERS - - - - -
 
 const int PARTICLE_DIAM = 10;
 const int NUM_COLUMNS = 2;
-const int NUM_PARTICLES = 23892;
+const int NUM_PARTICLES = 23892; // these three won't be hardcoded once lattice generation is ported
 const long double WIDTH = 1918.6;
 const long double HEIGHT = 1211.742744975187;
+
+// - - - - - IMPORTANT CONSTANTS - - - - -
 
 const long double STEP_SIZE = 0.0050;
 const long double VISCOSITY = 1.99e-3;
@@ -51,6 +53,10 @@ auto norm = normal_distribution <long double> (MU,SIGMA);
 /*
     Translates a MATLAB 2D particle array (that is saved via writematrix)
     into a C++ array
+    INPUTS:
+            fileName: points to the name of your desired file. must include file extension
+    OUTPUTS:
+            initialParticles: the particle positions in a 2d array format 
 */
 long double** importData(const char* fileName) {
     ifstream file(fileName);
@@ -61,7 +67,7 @@ long double** importData(const char* fileName) {
         initialParticles[i] = new long double[NUM_COLUMNS];
     }
 
-    // string* initialParticles = new string[23892][3];
+    // get all the data into our array
     if (file.is_open()) {
         string data = "";
         int count = 0;
@@ -79,6 +85,12 @@ long double** importData(const char* fileName) {
     return initialParticles;
 }
 
+/*
+    Converts the given C++ array into a txt file with the given name
+    INPUTS:
+            particles: 2d array containing particle positions
+            saveName: points to the name of the file you want to save to. must include file extension
+*/
 void exportData(long double** particles, const char* saveName) {
     // open desired file for saving
     ofstream myfile (saveName);
@@ -102,13 +114,20 @@ void exportData(long double** particles, const char* saveName) {
     delete[] particles;
 }
 
-// we need an array of vectors for the neighbor lists boi
+/*
+    Creates a neighbor list for the particles using simple means (i.e. not delaunay/voronoi)
+    INPUTS:
+            particles: 2d array containing particle positions
+    OUTPUTS:
+            neighbors: an array of vectors containing relevant array indexes from particles
+*/
 array<vector<int>,NUM_PARTICLES> getNeighborsSimple(long double** particles) {
     array<vector<int>,NUM_PARTICLES> neighbors;
     // loop through each row in neighbors and check distances
     for (int i = 0; i < NUM_PARTICLES; ++i) {
         long double currentParticle [2] = {particles[i][0], particles[i][1]};
 
+        // form the relevant delta around currentParticle
         long double xMin = currentParticle[0]-PARTICLE_DIAM*NEIGHB_THRESHOLD;
         long double xMax = currentParticle[0]+PARTICLE_DIAM*NEIGHB_THRESHOLD;
         long double yMin = currentParticle[1]-PARTICLE_DIAM*NEIGHB_THRESHOLD;
@@ -150,9 +169,18 @@ array<vector<int>,NUM_PARTICLES> getNeighborsSimple(long double** particles) {
 
     return neighbors;
 }
-// is broken for some reason 
+
+/*
+    Uses the neighbor list to resolve particle collisions
+    INPUTS:
+            particles: 2d array containing particle positions
+            neighbors: array of vectors containing particle indices
+    OUTPUTS:
+            particles: same as input, just with collisions resolved
+*/
 long double ** resolveCollisions(long double** particles, array<vector<int>,NUM_PARTICLES> neighbors) {
 
+    // loop through the neighbor list to get relevant particle inds
     for (int i = 0; i < NUM_PARTICLES; ++i) {
         int centralInd = i;
         long double centralParticle [2] = {particles[i][0], particles[i][1]};
@@ -160,7 +188,7 @@ long double ** resolveCollisions(long double** particles, array<vector<int>,NUM_
             int neighborInd = neighbors[i][j];
             long double neighborParticle [2] = {particles[neighborInd][0], particles[neighborInd][1]};
 
-            // DO WRAPAROUND BOUNDARY CONDITIONS
+            // adjust particles based on wraparound boundary conditions
             if (neighborParticle[0] < PARTICLE_DIAM && centralParticle[0] > WIDTH-PARTICLE_DIAM) {
                 neighborParticle[0] += WIDTH;
             } else if (neighborParticle[0] > WIDTH-PARTICLE_DIAM && centralParticle[0] < PARTICLE_DIAM) {
@@ -178,10 +206,9 @@ long double ** resolveCollisions(long double** particles, array<vector<int>,NUM_
 
             if (dist < PARTICLE_DIAM) {
                 // PUSH THEM BACK
-                // cout << "here" << endl;
                 long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
 
-                cout << r[0] << " " << r[1] << endl;
+                // cout << r[0] << " " << r[1] << endl;
 
                 particles[centralInd][0] += r[0];
                 particles[centralInd][1] += r[1];
@@ -193,6 +220,7 @@ long double ** resolveCollisions(long double** particles, array<vector<int>,NUM_
 
     }
 
+    // enforce wraparound boundary conditions
     for (int i = 0; i < NUM_PARTICLES; ++i) {
         if (particles[i][0] < 0) {
             particles[i][0] += WIDTH;
@@ -210,21 +238,35 @@ long double ** resolveCollisions(long double** particles, array<vector<int>,NUM_
     return particles;
 }
 
+/*
+    Runs the molecular dynamics simulation
+    INPUTS:
+            particles: 2d array containing particle positions
+            numFrames: how long you want the simulation to run for
+    OUTPUTS:
+            particles: the final particle positions
+*/
 long double ** runSim(long double ** particles, int numFrames) {
     int frameCount = 0;
 
     while (frameCount < numFrames) {
+        // get neighbor lists 
         array<vector<int>,NUM_PARTICLES> neighbors = getNeighborsSimple(particles);
+        
         for (int i = 0; i < 10; ++i) {
+            // move all the particles via brownian motion
             for (int m = 0; m < NUM_PARTICLES; ++m) {
                 for (int n = 0; n < NUM_COLUMNS; ++n) {
-                    particles[m][n] += norm(urbg)*SCALING_FACTOR;
+                    long double test = norm(urbg)*SCALING_FACTOR;
+                    particles[m][n] += test;
+                    cout << test <<endl;
                 }
             }
-
+            // do collision resolution
             particles = resolveCollisions(particles, neighbors);
         }
 
+        // report the frame as done
         frameCount++;
         cout << "frame " + to_string(frameCount) + " done" << endl;
     }
