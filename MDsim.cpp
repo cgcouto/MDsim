@@ -45,13 +45,14 @@ const long double VISCOSITY = 1.99e-3;
 const int TEMPERATURE = 300;
 const long double BOLTZ_CONSTANT = 1.381e-23;
 const long double SCALING_FACTOR = PARTICLE_DIAM/(1.3e-6);
-const long double  SQUIG = (6*M_PI*(PARTICLE_DIAM/2))/SCALING_FACTOR;
+const long double  SQUIG = (6*M_PI*VISCOSITY*(PARTICLE_DIAM/2))/SCALING_FACTOR;
 const long double NEIGHB_THRESHOLD = 2;
 
 const int MU = 0;
-const long double SIGMA = sqrt((2*BOLTZ_CONSTANT*TEMPERATURE)/(SQUIG * STEP_SIZE));
-auto urbg = mt19937(123); // generator(seed) - mersenne twister based around 2^(19937)-1 
-auto norm = normal_distribution <long double> (MU,SIGMA);
+const long double SIGMA = sqrt((2*BOLTZ_CONSTANT*TEMPERATURE)/SQUIG * STEP_SIZE);
+random_device rd; 
+mt19937 gen(rd()); // generator(seed) - mersenne twister based around 2^(19937)-1 
+normal_distribution <float> d(MU,SIGMA);
 
 /*
     Translates a MATLAB 2D particle array (that is saved via writematrix)
@@ -78,7 +79,6 @@ long double** importData(const char* fileName) {
             stringstream ss(data);
             while(getline(ss, data, ',')) { // get each element in the line
                 initialParticles[count/NUM_COLUMNS][count % NUM_COLUMNS] = stold(data);
-                // cout << to_string(initialParticles[count/NUM_COLUMNS][count % NUM_COLUMNS]) << endl;
                 count++;
             }
         }
@@ -155,16 +155,7 @@ array<vector<int>,NUM_PARTICLES> getNeighborsSimple(long double** particles) {
             }
     
         }
-        cout << neighbors[i].size() << endl;
-        // if (neighbors[i].size() == 0) {
-        //     cout << particles[i][0] << " " << particles[i][1] << endl;
-        // }
-        // cout << neighbors[i].size() << endl;
     }
-
-    // cout << PARTICLE_DIAM*NEIGHB_THRESHOLD << endl;
-    // cout << WIDTH-PARTICLE_DIAM*NEIGHB_THRESHOLD << endl;
-    // cout << HEIGHT-PARTICLE_DIAM*NEIGHB_THRESHOLD << endl;
 
     return neighbors;
 }
@@ -204,10 +195,9 @@ long double ** resolveCollisions(long double** particles, array<vector<int>,NUM_
             long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
 
             if (dist < PARTICLE_DIAM) {
+
                 // PUSH THEM BACK
                 long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
-
-                // cout << r[0] << " " << r[1] << endl;
 
                 particles[centralInd][0] += r[0];
                 particles[centralInd][1] += r[1];
@@ -258,9 +248,7 @@ long double ** runSim(long double ** particles, int numFrames) {
             // move all the particles via brownian motion
             for (int m = 0; m < NUM_PARTICLES; ++m) {
                 for (int n = 0; n < NUM_COLUMNS; ++n) {
-                    long double test = norm(urbg)*SCALING_FACTOR;
-                    particles[m][n] += test;
-                    // cout << test <<endl;
+                    particles[m][n] += d(gen)*SCALING_FACTOR;
                 }
             }
             // do collision resolution
@@ -280,9 +268,8 @@ long double ** runSim(long double ** particles, int numFrames) {
 int main() {
     // import particle positions 
     long double** particles = importData("initial_particles.txt");
-
     // run the sim
-    particles = runSim(particles, 10);
+    particles = runSim(particles, 50);
 
     // export particle positions
     exportData(particles, "test.txt");
