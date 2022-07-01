@@ -17,7 +17,6 @@
 // some kind of graphing package for making plots
 // a package for delaunay triangulation/voronoi
 
-
 // things i will need to write in the future
 
 // makeHCP
@@ -25,7 +24,6 @@
 // getNeighborAndPsi6
 // getImage
 // getPsi6Image
-
 
 using namespace std; // so we don't have to put std:: in front of certain things
 
@@ -50,9 +48,19 @@ const long double NEIGHB_THRESHOLD = 2;
 
 const int MU = 0;
 const long double SIGMA = sqrt((2*BOLTZ_CONSTANT*TEMPERATURE)/SQUIG * STEP_SIZE);
-random_device rd; 
-mt19937 gen(rd()); // generator(seed) - mersenne twister based around 2^(19937)-1 
+random_device rd; // creates random integer seed values each time we run
+unsigned int seed = rd();
+mt19937 gen(seed); // generator(seed) - mersenne twister based around 2^(19937)-1 
 normal_distribution <float> d(MU,SIGMA);
+
+// sizes the neighbor cells variably (you'll get slightly different result depending on the sim width/height)
+// should consult with sharon next week before finalizing this...
+const int TABLE_WIDTH = floor(WIDTH/(PARTICLE_DIAM*NEIGHB_THRESHOLD));
+const int TABLE_HEIGHT = floor(HEIGHT/(PARTICLE_DIAM*NEIGHB_THRESHOLD));
+
+const long double CELL_WIDTH = WIDTH/TABLE_WIDTH;
+const long double CELL_HEIGHT = HEIGHT/TABLE_HEIGHT;
+
 
 /*
     Translates a MATLAB 2D particle array (that is saved via writematrix)
@@ -117,6 +125,50 @@ void exportData(long double** particles, const char* saveName) {
     delete[] particles;
 }
 
+
+int ** buildNeighborMapping() {
+    int** neighborMapping = new int*[TABLE_HEIGHT*TABLE_WIDTH];
+    for (int i = 0; i < TABLE_HEIGHT; ++i) {
+        neighborMapping[i] = new int[8];
+    }
+
+    // loop through all the possible cell coordinates
+    for (int m = 0; m < TABLE_WIDTH; ++m) {
+        for (int n = 0; n < TABLE_HEIGHT; ++n) {
+
+            int tableIndex = m + TABLE_WIDTH * n;
+            // do our mapping and encode it in indices
+            // the ninth neighbor (itself) is implied by the tableIndex
+            neighborMapping[tableIndex][0] = (m-1 % TABLE_WIDTH) + TABLE_WIDTH*n;
+            neighborMapping[tableIndex][1] = (m+1 % TABLE_WIDTH) + TABLE_WIDTH*n;
+            neighborMapping[tableIndex][2] = m + TABLE_WIDTH*(n-1 % TABLE_HEIGHT);
+            neighborMapping[tableIndex][3] = m + TABLE_WIDTH*(n+1 % TABLE_HEIGHT);
+            neighborMapping[tableIndex][4] = (m-1 % TABLE_WIDTH) + TABLE_WIDTH*(n-1 % TABLE_HEIGHT);
+            neighborMapping[tableIndex][5] = (m-1 % TABLE_WIDTH) + TABLE_WIDTH*(n+1 % TABLE_HEIGHT);
+            neighborMapping[tableIndex][6] = (m+1 % TABLE_WIDTH) + TABLE_WIDTH*(n-1 % TABLE_HEIGHT);
+            neighborMapping[tableIndex][7] = (m+1 % TABLE_WIDTH) + TABLE_WIDTH*(n+1 % TABLE_HEIGHT);
+        }
+
+    }
+
+    return neighborMapping;
+}
+
+array<vector<int>,TABLE_WIDTH*TABLE_HEIGHT> getNeighborsCell(long double** particles, int** neighborMapping) {
+    array<vector<int>,TABLE_WIDTH*TABLE_HEIGHT> neighbors;
+
+    for (int i = 0; i < NUM_PARTICLES; ++i) {
+        // get the position of the cell the particle is in
+        int tableX = floor(particles[i][0] / CELL_WIDTH);
+        int tableY = floor(particles[i][1] / CELL_HEIGHT);
+        
+        // translate position to index and add to vector
+        neighbors[tableX + TABLE_HEIGHT*tableY].push_back(i);
+    }
+
+    return neighbors;
+}
+
 /*
     Creates a neighbor list for the particles using simple means (i.e. not delaunay/voronoi)
     INPUTS:
@@ -168,7 +220,7 @@ array<vector<int>,NUM_PARTICLES> getNeighborsSimple(long double** particles) {
     OUTPUTS:
             particles: same as input, just with collisions resolved
 */
-long double ** resolveCollisions(long double** particles, array<vector<int>,NUM_PARTICLES> neighbors) {
+long double ** resolveCollisionsSimple(long double** particles, array<vector<int>,NUM_PARTICLES> neighbors) {
 
     // loop through the neighbor list to get relevant particle inds
     for (int i = 0; i < NUM_PARTICLES; ++i) {
@@ -227,6 +279,77 @@ long double ** resolveCollisions(long double** particles, array<vector<int>,NUM_
     return particles;
 }
 
+long double ** resolveCollisionsCell(long double** particles, array<vector<int>,TABLE_WIDTH*TABLE_HEIGHT> neighbors, int** neighborMapping) {
+    
+    // go through all the indices in the neighbor list (size is equal to NUM_PARTICLES)
+    for (int i = 0; i < TABLE_WIDTH*TABLE_HEIGHT; ++i) {
+        for (int j = 0; j < neighbors[i].size(); ++j) {
+            int centralInd = neighbors[i][j];
+            long double centralParticle [2] = {particles[centralInd][0], particles[centralInd][1]};
+
+            // use the neighbor mapping to get all the neighbor particles in the appropriate cells
+            for (int m = 0; m < 9; ++m) {
+                int currentCell = neighborMapping[i][m];
+
+                // make sure we catch the cell the particle is in as well!
+                if (m == 9) {
+                    currentCell = i;
+                }
+
+                for (int n = 0; n < neighbors[currentCell].size(); ++n) {
+                    int neighborInd = neighbors[currentCell][n];
+                    long double neighborParticle [2] = {particles[neighborInd][0], particles[neighborInd][1]};
+
+                    // adjust particles based on wraparound boundary conditions
+                    if (neighborParticle[0] < PARTICLE_DIAM && centralParticle[0] > WIDTH-PARTICLE_DIAM) {
+                        neighborParticle[0] += WIDTH;
+                    } else if (neighborParticle[0] > WIDTH-PARTICLE_DIAM && centralParticle[0] < PARTICLE_DIAM) {
+                        neighborParticle[0] -= WIDTH;
+                    }
+
+                    if (neighborParticle[1] < PARTICLE_DIAM && centralParticle[1] > HEIGHT-PARTICLE_DIAM) {
+                        neighborParticle[1] += HEIGHT;
+                    } else if (neighborParticle[1] > HEIGHT-PARTICLE_DIAM && centralParticle[1] < PARTICLE_DIAM) {
+                        neighborParticle[1] -= HEIGHT;
+                    }
+
+                    // get distance between points
+                    long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
+
+                    if (dist < PARTICLE_DIAM) {
+
+                        // PUSH THEM BACK
+                        long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
+
+                        particles[centralInd][0] += r[0];
+                        particles[centralInd][1] += r[1];
+                        particles[neighborInd][0] -= r[0];
+                        particles[neighborInd][1] -= r[1];
+                    }
+                }
+            }
+        }
+        
+    }
+
+    // enforce wraparound boundary conditions
+    for (int i = 0; i < NUM_PARTICLES; ++i) {
+        if (particles[i][0] < 0) {
+            particles[i][0] += WIDTH;
+        } else if (particles[i][0] > WIDTH) {
+            particles[i][0] -= WIDTH;
+        }
+
+        if (particles[i][1] < 0) {
+            particles[i][1] += HEIGHT;
+        } else if (particles[i][1] > HEIGHT) {
+            particles[i][1] -= HEIGHT;
+        }
+    }
+
+    return particles;
+}
+
 /*
     Runs the molecular dynamics simulation
     INPUTS:
@@ -252,7 +375,7 @@ long double ** runSim(long double ** particles, int numFrames) {
                 }
             }
             // do collision resolution
-            particles = resolveCollisions(particles, neighbors);
+            particles = resolveCollisionsSimple(particles, neighbors);
         }
         cout << "movement and collisions done" << endl;
 
@@ -268,11 +391,15 @@ long double ** runSim(long double ** particles, int numFrames) {
 int main() {
     // import particle positions 
     long double** particles = importData("initial_particles.txt");
+
+    int ** neighborMap = buildNeighborMapping();
+
+    cout << seed << endl;
     // run the sim
     particles = runSim(particles, 50);
 
     // export particle positions
-    exportData(particles, "test.txt");
+    exportData(particles, "final_particles.txt");
 
     return 0;
 }
