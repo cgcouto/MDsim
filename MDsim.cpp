@@ -55,8 +55,9 @@ normal_distribution <float> d(MU,SIGMA);
 
 // sizes the neighbor cells variably (you'll get slightly different result depending on the sim width/height)
 // should consult with sharon next week before finalizing this...
-const int TABLE_WIDTH = floor(WIDTH/(PARTICLE_DIAM*NEIGHB_THRESHOLD));
-const int TABLE_HEIGHT = floor(HEIGHT/(PARTICLE_DIAM*NEIGHB_THRESHOLD));
+const int TABLE_WIDTH = static_cast<int> (floor(WIDTH/(PARTICLE_DIAM*NEIGHB_THRESHOLD)));
+const int TABLE_HEIGHT = static_cast<int> (floor(HEIGHT/(PARTICLE_DIAM*NEIGHB_THRESHOLD)));
+const int TABLE_SIZE = 95*60;
 
 const long double CELL_WIDTH = WIDTH/TABLE_WIDTH;
 const long double CELL_HEIGHT = HEIGHT/TABLE_HEIGHT;
@@ -127,8 +128,8 @@ void exportData(long double** particles, const char* saveName) {
 
 
 int ** buildNeighborMapping() {
-    int** neighborMapping = new int*[TABLE_HEIGHT*TABLE_WIDTH];
-    for (int i = 0; i < TABLE_HEIGHT; ++i) {
+    int** neighborMapping = new int*[TABLE_SIZE];
+    for (int i = 0; i < TABLE_SIZE; ++i) {
         neighborMapping[i] = new int[8];
     }
 
@@ -139,14 +140,26 @@ int ** buildNeighborMapping() {
             int tableIndex = m + TABLE_WIDTH * n;
             // do our mapping and encode it in indices
             // the ninth neighbor (itself) is implied by the tableIndex
-            neighborMapping[tableIndex][0] = (m-1 % TABLE_WIDTH) + TABLE_WIDTH*n;
-            neighborMapping[tableIndex][1] = (m+1 % TABLE_WIDTH) + TABLE_WIDTH*n;
-            neighborMapping[tableIndex][2] = m + TABLE_WIDTH*(n-1 % TABLE_HEIGHT);
-            neighborMapping[tableIndex][3] = m + TABLE_WIDTH*(n+1 % TABLE_HEIGHT);
-            neighborMapping[tableIndex][4] = (m-1 % TABLE_WIDTH) + TABLE_WIDTH*(n-1 % TABLE_HEIGHT);
-            neighborMapping[tableIndex][5] = (m-1 % TABLE_WIDTH) + TABLE_WIDTH*(n+1 % TABLE_HEIGHT);
-            neighborMapping[tableIndex][6] = (m+1 % TABLE_WIDTH) + TABLE_WIDTH*(n-1 % TABLE_HEIGHT);
-            neighborMapping[tableIndex][7] = (m+1 % TABLE_WIDTH) + TABLE_WIDTH*(n+1 % TABLE_HEIGHT);
+            neighborMapping[tableIndex][0] = ((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) + TABLE_WIDTH*n;
+            neighborMapping[tableIndex][1] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*n;
+            neighborMapping[tableIndex][2] = m + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][3] = m + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][4] = (((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][5] = (((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][6] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][7] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+
+            int test = 0;
+            if (tableIndex == test) {
+                std::cout << neighborMapping[test][0] << endl;
+                std::cout << neighborMapping[test][1] << endl;
+                std::cout << neighborMapping[test][2] << endl;
+                std::cout << neighborMapping[test][3] << endl;
+                std::cout << neighborMapping[test][4] << endl;
+                std::cout << neighborMapping[test][5] << endl;
+                std::cout << neighborMapping[test][6] << endl;
+                std::cout << neighborMapping[test][7] << endl;
+            }
         }
 
     }
@@ -154,13 +167,13 @@ int ** buildNeighborMapping() {
     return neighborMapping;
 }
 
-array<vector<int>,TABLE_WIDTH*TABLE_HEIGHT> getNeighborsCell(long double** particles, int** neighborMapping) {
-    array<vector<int>,TABLE_WIDTH*TABLE_HEIGHT> neighbors;
+array<vector<int>,TABLE_SIZE> getNeighborsCell(long double** particles, int** neighborMapping) {
+    array<vector<int>,TABLE_SIZE> neighbors;
 
     for (int i = 0; i < NUM_PARTICLES; ++i) {
         // get the position of the cell the particle is in
-        int tableX = floor(particles[i][0] / CELL_WIDTH);
-        int tableY = floor(particles[i][1] / CELL_HEIGHT);
+        int tableX = static_cast<int> (floor(particles[i][0] / CELL_WIDTH));
+        int tableY = static_cast<int> (floor(particles[i][1] / CELL_HEIGHT));
         
         // translate position to index and add to vector
         neighbors[tableX + TABLE_HEIGHT*tableY].push_back(i);
@@ -245,9 +258,9 @@ long double ** resolveCollisionsSimple(long double** particles, array<vector<int
 
             // get distance between points
             long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
-
+            
             if (dist < PARTICLE_DIAM) {
-
+                
                 // PUSH THEM BACK
                 long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
 
@@ -279,52 +292,60 @@ long double ** resolveCollisionsSimple(long double** particles, array<vector<int
     return particles;
 }
 
-long double ** resolveCollisionsCell(long double** particles, array<vector<int>,TABLE_WIDTH*TABLE_HEIGHT> neighbors, int** neighborMapping) {
+long double ** resolveCollisionsCell(long double** particles, array<vector<int>,TABLE_SIZE> neighbors, int** neighborMapping) {
     
     // go through all the indices in the neighbor list (size is equal to NUM_PARTICLES)
-    for (int i = 0; i < TABLE_WIDTH*TABLE_HEIGHT; ++i) {
+
+    // int collisionCount = 0;
+    for (int i = 0; i < TABLE_SIZE; ++i) {
         for (int j = 0; j < neighbors[i].size(); ++j) {
             int centralInd = neighbors[i][j];
             long double centralParticle [2] = {particles[centralInd][0], particles[centralInd][1]};
 
             // use the neighbor mapping to get all the neighbor particles in the appropriate cells
             for (int m = 0; m < 9; ++m) {
-                int currentCell = neighborMapping[i][m];
-
                 // make sure we catch the cell the particle is in as well!
-                if (m == 9) {
+                int currentCell;
+                if (m == 8) {
                     currentCell = i;
+                } else {
+                    currentCell = neighborMapping[i][m];
                 }
 
+                cout << neighbors[currentCell].size() << endl;
                 for (int n = 0; n < neighbors[currentCell].size(); ++n) {
                     int neighborInd = neighbors[currentCell][n];
-                    long double neighborParticle [2] = {particles[neighborInd][0], particles[neighborInd][1]};
 
-                    // adjust particles based on wraparound boundary conditions
-                    if (neighborParticle[0] < PARTICLE_DIAM && centralParticle[0] > WIDTH-PARTICLE_DIAM) {
-                        neighborParticle[0] += WIDTH;
-                    } else if (neighborParticle[0] > WIDTH-PARTICLE_DIAM && centralParticle[0] < PARTICLE_DIAM) {
-                        neighborParticle[0] -= WIDTH;
-                    }
+                    if (neighborInd != centralInd) {
+                        long double neighborParticle [2] = {particles[neighborInd][0], particles[neighborInd][1]};
 
-                    if (neighborParticle[1] < PARTICLE_DIAM && centralParticle[1] > HEIGHT-PARTICLE_DIAM) {
-                        neighborParticle[1] += HEIGHT;
-                    } else if (neighborParticle[1] > HEIGHT-PARTICLE_DIAM && centralParticle[1] < PARTICLE_DIAM) {
-                        neighborParticle[1] -= HEIGHT;
-                    }
+                        // adjust particles based on wraparound boundary conditions
+                        if (neighborParticle[0] < PARTICLE_DIAM && centralParticle[0] > WIDTH-PARTICLE_DIAM) {
+                            neighborParticle[0] += WIDTH;
+                        } else if (neighborParticle[0] > WIDTH-PARTICLE_DIAM && centralParticle[0] < PARTICLE_DIAM) {
+                            neighborParticle[0] -= WIDTH;
+                        }
 
-                    // get distance between points
-                    long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
+                        if (neighborParticle[1] < PARTICLE_DIAM && centralParticle[1] > HEIGHT-PARTICLE_DIAM) {
+                            neighborParticle[1] += HEIGHT;
+                        } else if (neighborParticle[1] > HEIGHT-PARTICLE_DIAM && centralParticle[1] < PARTICLE_DIAM) {
+                            neighborParticle[1] -= HEIGHT;
+                        }
 
-                    if (dist < PARTICLE_DIAM) {
+                        // get distance between points
+                        long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
+                        // std::cout << dist << endl;
+                        if (dist < PARTICLE_DIAM) {
+                            // cout << "actually found a collision" << endl;
+                            // collisionCount++;
+                            // PUSH THEM BACK
+                            long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
 
-                        // PUSH THEM BACK
-                        long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
-
-                        particles[centralInd][0] += r[0];
-                        particles[centralInd][1] += r[1];
-                        particles[neighborInd][0] -= r[0];
-                        particles[neighborInd][1] -= r[1];
+                            particles[centralInd][0] += r[0];
+                            particles[centralInd][1] += r[1];
+                            particles[neighborInd][0] -= r[0];
+                            particles[neighborInd][1] -= r[1];
+                        }
                     }
                 }
             }
@@ -347,6 +368,7 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
         }
     }
 
+    // cout << collisionCount << endl;
     return particles;
 }
 
@@ -361,11 +383,21 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
 long double ** runSim(long double ** particles, int numFrames) {
     int frameCount = 0;
 
+    int ** neighborMap = buildNeighborMapping();
+
+    for (int n = 0; n < 8; ++n) {
+        // for (int m = 0; m < TABLE_WIDTH; ++m) {
+            // int tableIndex = m + TABLE_WIDTH * n;
+
+        // std::cout << neighborMap[0][n] << endl;
+    }
+
     while (frameCount < numFrames) {
         // get neighbor lists 
         
-        array<vector<int>,NUM_PARTICLES> neighbors = getNeighborsSimple(particles);
-        cout << "neighbors done" << endl;
+        // array<vector<int>,NUM_PARTICLES> neighbors = getNeighborsSimple(particles);
+        array<vector<int>,TABLE_SIZE> neighbors = getNeighborsCell(particles, neighborMap);
+        std::cout << "neighbors done" << endl;
         
         for (int i = 0; i < 10; ++i) {
             // move all the particles via brownian motion
@@ -374,14 +406,16 @@ long double ** runSim(long double ** particles, int numFrames) {
                     particles[m][n] += d(gen)*SCALING_FACTOR;
                 }
             }
+
             // do collision resolution
-            particles = resolveCollisionsSimple(particles, neighbors);
+            // particles = resolveCollisionsSimple(particles, neighbors);
+            particles = resolveCollisionsCell(particles, neighbors, neighborMap);
         }
-        cout << "movement and collisions done" << endl;
+        std::cout << "movement and collisions done" << endl;
 
         // report the frame as done
         frameCount++;
-        cout << "frame " + to_string(frameCount) + " done" << endl;
+        std::cout << "frame " + to_string(frameCount) + " done" << endl;
     }
 
     return particles;
@@ -392,11 +426,11 @@ int main() {
     // import particle positions 
     long double** particles = importData("initial_particles.txt");
 
-    int ** neighborMap = buildNeighborMapping();
-
-    cout << seed << endl;
+    cout << TABLE_WIDTH << endl;
+    cout << TABLE_HEIGHT << endl;
+    // std::cout << -1 % 95 << endl;
     // run the sim
-    particles = runSim(particles, 50);
+    particles = runSim(particles, 10);
 
     // export particle positions
     exportData(particles, "final_particles.txt");
