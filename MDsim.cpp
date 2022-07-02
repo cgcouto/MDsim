@@ -10,6 +10,7 @@
 #include <random>
 #include <vector>
 #include <array>
+#include <chrono>
 
 // packages i will probably need in the future
 
@@ -28,6 +29,7 @@
 // things i will need to fix in the future
 
 // the sig fig problem with exportData
+// sort out the whole needing a constant to initialize the array of vectors at compile time
 
 using namespace std; // so we don't have to put std:: in front of certain things
 
@@ -53,7 +55,7 @@ const long double NEIGHB_THRESHOLD = 2;
 const int MU = 0;
 const long double SIGMA = sqrt((2*BOLTZ_CONSTANT*TEMPERATURE)/SQUIG * STEP_SIZE);
 random_device rd; // creates random integer seed values each time we run
-unsigned int seed = rd();
+unsigned int seed = rd(); // put the seed into an int so we can store it if we wish
 mt19937 gen(seed); // generator(seed) - mersenne twister based around 2^(19937)-1 
 normal_distribution <float> d(MU,SIGMA);
 
@@ -102,7 +104,7 @@ long double** importData(const char* fileName) {
 }
 
 /*
-    Converts the given C++ array into a txt file with the given name
+    Converts the given C++ particle array into a txt file with the given name
     INPUTS:
             particles: 2d array containing particle positions
             saveName: points to the name of the file you want to save to. must include file extension
@@ -123,15 +125,72 @@ void exportData(long double** particles, const char* saveName) {
         }
         myfile.close();
   }
-    // clear particle positions from heap
-    // for (int i = 0; i < NUM_PARTICLES; i++) {
-    //     delete[] particles[i];
-    // }
-    // delete[] particles;
 }
 
+/*
+    Saves the given neighbor array as a txt file with dimensions TABLE_SIZE x 20
+    Extra zeros are added to each row to get it to 20 total entries
+    INPUTS:
+            neighbors: array of vectors that contains the indices of the particles within each cell
+            saveName: points to the name of the file you want to save to. must include file extension
+*/
+void exportNeighbors(array<vector<int>,TABLE_SIZE> neighbors, const char* saveName) {
+    // open desired file for saving
+    ofstream myfile (saveName);
 
+    if (myfile.is_open()) {
+        // add the array data to the file in the proper format
+        for (int i = 0; i < TABLE_SIZE; ++i) {
+            for (int j = 0; j < neighbors[i].size(); ++j) {
+                myfile << to_string(neighbors[i][j]+1);
+                myfile << " "; 
+            }
+            for (int k = 0; k < 19 - neighbors[i].size(); ++k) {
+                myfile << "0 ";
+            }
+            myfile << std::fixed << "0";
+            myfile << "\n";
+        }
+        myfile.close();
+  }
+}
+
+/*
+    Saves the given cell mapping as a txt file with dimensions TABLE_SIZE x 8
+    INPUTS:
+            neighbors: 2d array of ints that contains the indices of the cells that each cell is neighbors with
+            saveName: points to the name of the file you want to save to. must include file extension
+*/
+void exportMapping(int** neighborMapping, const char* saveName) {
+    // open desired file for saving
+    ofstream myfile (saveName);
+
+    if (myfile.is_open()) {
+        // add the array data to the file in the proper format
+        for (int i = 0; i < TABLE_SIZE-1; ++i) {
+            for (int j = 0; j < 7; ++j) {
+                myfile << to_string(neighborMapping[i][j]+1);
+                myfile << " "; 
+            }
+            myfile << std::fixed << neighborMapping[i][8]+1;
+            myfile << "\n";
+        }
+        myfile.close();
+  }
+    // clear neighbor mapping from heap
+    for (int i = 0; i < TABLE_SIZE; i++) {
+        delete[] neighborMapping[i];
+    }
+    delete[] neighborMapping;
+}
+
+/*
+    Creates and stores the neighbors of each cell so we can access their indices in constant time
+    OUTPUTS:
+            neighborMapping: a 2d array of ints that stores the neighbors of each cell
+*/
 int ** buildNeighborMapping() {
+    // create the 2d array of ints
     int** neighborMapping = new int*[TABLE_SIZE];
     for (int i = 0; i < TABLE_SIZE; ++i) {
         neighborMapping[i] = new int[8];
@@ -152,51 +211,33 @@ int ** buildNeighborMapping() {
             neighborMapping[tableIndex][5] = (((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
             neighborMapping[tableIndex][6] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
             neighborMapping[tableIndex][7] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
-
-            int test = 1000;
-            if (tableIndex == test) {
-                std::cout << neighborMapping[test][0] << endl;
-                std::cout << neighborMapping[test][1] << endl;
-                std::cout << neighborMapping[test][2] << endl;
-                std::cout << neighborMapping[test][3] << endl;
-                std::cout << neighborMapping[test][4] << endl;
-                std::cout << neighborMapping[test][5] << endl;
-                std::cout << neighborMapping[test][6] << endl;
-                std::cout << neighborMapping[test][7] << endl;
-            }
         }
-
     }
 
     return neighborMapping;
 }
 
+/*
+    Creates a neighbor list for the particles using the cell list method
+    INPUTS:
+            particles: 2d array containing particle positions
+            neighborMapping: 2d array storing the neighbors of each cell
+    OUTPUTS:
+            neighbors: an array of vectors containing relevant array indexes from particles that fit in each cell
+*/
 array<vector<int>,TABLE_SIZE> getNeighborsCell(long double** particles, int** neighborMapping) {
     array<vector<int>,TABLE_SIZE> neighbors;
 
-    // int arrMax = 0;
-    // int sumMax = 0;
     for (int i = 0; i < NUM_PARTICLES; ++i) {
         // get the position of the cell the particle is in
         int tableX = static_cast<int> (floor(particles[i][0] / CELL_WIDTH));
         int tableY = static_cast<int> (floor(particles[i][1] / CELL_HEIGHT));
         
         // translate position to index and add to vector
-        // cout << tableX + TABLE_HEIGHT*tableY << " " << particles[i][0] << " " << particles[i][1] << endl;
         neighbors[tableX + TABLE_WIDTH*tableY].push_back(i);
-
-        // if (tableX + TABLE_WIDTH*tableY > arrMax) {
-        //     arrMax = tableX + TABLE_WIDTH*tableY;
-        // }
-        // if (tableX + tableY > sumMax) {
-        //     sumMax = tableX+tableY;
-        // }
 
     }
 
-    // cout << TABLE_SIZE << endl;
-    // cout << arrMax << endl;
-    // cout << sumMax << endl;
     return neighbors;
 }
 
@@ -253,12 +294,10 @@ array<vector<int>,NUM_PARTICLES> getNeighborsSimple(long double** particles) {
 */
 long double ** resolveCollisionsSimple(long double** particles, array<vector<int>,NUM_PARTICLES> neighbors) {
 
-    int collisionCount = 0;
     // loop through the neighbor list to get relevant particle inds
     for (int i = 0; i < NUM_PARTICLES; ++i) {
         int centralInd = i;
         long double centralParticle [2] = {particles[i][0], particles[i][1]};
-        cout << neighbors[i].size() << endl;
         for (int j = 0; j < neighbors[i].size(); ++j) {
             int neighborInd = neighbors[i][j];
             long double neighborParticle [2] = {particles[neighborInd][0], particles[neighborInd][1]};
@@ -280,7 +319,6 @@ long double ** resolveCollisionsSimple(long double** particles, array<vector<int
             long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
             
             if (dist < PARTICLE_DIAM) {
-                collisionCount++;
                 // PUSH THEM BACK
                 long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
 
@@ -291,7 +329,6 @@ long double ** resolveCollisionsSimple(long double** particles, array<vector<int
 
             }
         }
-
     }
 
     // enforce wraparound boundary conditions
@@ -309,15 +346,20 @@ long double ** resolveCollisionsSimple(long double** particles, array<vector<int
         }
 
     }
-    cout << collisionCount << endl;
     return particles;
 }
 
+/*
+    Uses the neighbor list to resolve particle collisions
+    INPUTS:
+            particles: 2d array containing particle positions
+            neighbors: array of vectors containing particle indices that lie in each cell
+    OUTPUTS:
+            particles: same as input, just with collisions resolved
+*/
 long double ** resolveCollisionsCell(long double** particles, array<vector<int>,TABLE_SIZE> neighbors, int** neighborMapping) {
     
     // go through all the indices in the neighbor list (size is equal to NUM_PARTICLES)
-
-    int collisionCount = 0;
     for (int i = 0; i < TABLE_SIZE; ++i) {
         for (int j = 0; j < neighbors[i].size(); ++j) {
             int centralInd = neighbors[i][j];
@@ -337,6 +379,7 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
                 for (int n = 0; n < neighbors[currentCell].size(); ++n) {
                     int neighborInd = neighbors[currentCell][n];
 
+                    // we don't want a particle to consider itself as its own neighbor
                     if (neighborInd != centralInd) {
                         long double neighborParticle [2] = {particles[neighborInd][0], particles[neighborInd][1]};
 
@@ -355,10 +398,9 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
 
                         // get distance between points
                         long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
-                        // std::cout << dist << endl;
+
                         if (dist < PARTICLE_DIAM) {
-                            // cout << "actually found a collision" << endl;
-                             collisionCount++;
+
                             // PUSH THEM BACK
                             long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
 
@@ -370,9 +412,7 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
                     }
                 }
             }
-            // cout << "- - - -" << endl;
-        }
-        
+        } 
     }
 
     // enforce wraparound boundary conditions
@@ -390,61 +430,11 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
         }
     }
 
-    // cout << collisionCount << endl;
-    return particles;
-}
-
-void exportNeighbors(array<vector<int>,TABLE_SIZE> neighbors, const char* saveName) {
-    // open desired file for saving
-    ofstream myfile (saveName);
-
-    if (myfile.is_open()) {
-        // add the array data to the file in the proper format
-        for (int i = 0; i < TABLE_SIZE; ++i) {
-            for (int j = 0; j < neighbors[i].size(); ++j) {
-                myfile << to_string(neighbors[i][j]+1);
-                myfile << " "; 
-            }
-            for (int k = 0; k < 19 - neighbors[i].size(); ++k) {
-                myfile << "0 ";
-            }
-            myfile << std::fixed << "0";
-            myfile << "\n";
-        }
-        myfile.close();
-  }
-    // // clear particle positions from heap
-    // for (int i = 0; i < TABLE_SIZE; i++) {
-    //     delete[] neighbors[i];
-    // }
-    // delete[] neighbors;
-}
-
-void exportMapping(int** neighborMapping, const char* saveName) {
-    // open desired file for saving
-    ofstream myfile (saveName);
-
-    if (myfile.is_open()) {
-        // add the array data to the file in the proper format
-        for (int i = 0; i < TABLE_SIZE-1; ++i) {
-            for (int j = 0; j < 7; ++j) {
-                myfile << to_string(neighborMapping[i][j]+1);
-                myfile << " "; 
-            }
-            myfile << std::fixed << neighborMapping[i][8]+1;
-            myfile << "\n";
-        }
-        myfile.close();
-  }
-    // clear neighbor mapping from heap
-    for (int i = 0; i < TABLE_SIZE; i++) {
-        delete[] neighborMapping[i];
-    }
-    delete[] neighborMapping;
+   return particles;
 }
 
 /*
-    Runs the molecular dynamics simulation
+    Runs the molecular dynamics simulation with cell lists - O(N)
     INPUTS:
             particles: 2d array containing particle positions
             numFrames: how long you want the simulation to run for
@@ -452,34 +442,35 @@ void exportMapping(int** neighborMapping, const char* saveName) {
             particles: the final particle positions
 */
 long double ** runSimCell(long double ** particles, int numFrames) {
+
     int frameCount = 0;
 
+    // store our mapping of cells to their neighbors
     int ** neighborMap = buildNeighborMapping();
     array<vector<int>,TABLE_SIZE> neighbors;
+
     while (frameCount < numFrames) {
         // get neighbor lists 
         neighbors = getNeighborsCell(particles, neighborMap);
-        std::cout << "neighbors done" << endl;
-        // array<vector<int>,NUM_PARTICLES> neighbors = getNeighborsSimple(particles);
         
         for (int i = 0; i < 10; ++i) {
            
-            
             // move all the particles via brownian motion
             for (int m = 0; m < NUM_PARTICLES; ++m) {
                 for (int n = 0; n < NUM_COLUMNS; ++n) {
                     particles[m][n] += d(gen)*SCALING_FACTOR;
                 }
             }
+
             // do collision resolution
             particles = resolveCollisionsCell(particles, neighbors, neighborMap);
         }
-        std::cout << "movement and collisions done" << endl;
 
         // report the frame as done
         frameCount++;
         std::cout << "frame " + to_string(frameCount) + " done" << endl;
 
+        // save the final neighbor list and cell mapping
         if (frameCount == numFrames) {
             exportNeighbors(neighbors, "neighbors.txt");
             exportMapping(neighborMap, "mapping.txt");
@@ -491,7 +482,7 @@ long double ** runSimCell(long double ** particles, int numFrames) {
 }
 
 /*
-    Runs the molecular dynamics simulation
+    Runs the molecular dynamics simulation with simple neighbor finding - O(N^2)
     INPUTS:
             particles: 2d array containing particle positions
             numFrames: how long you want the simulation to run for
@@ -502,12 +493,12 @@ long double ** runSimSimple(long double ** particles, int numFrames) {
     int frameCount = 0;
 
     while (frameCount < numFrames) {
+
         // get neighbor lists 
-        
         array<vector<int>,NUM_PARTICLES> neighbors = getNeighborsSimple(particles);
-        std::cout << "neighbors done" << endl;
         
         for (int i = 0; i < 10; ++i) {
+
             // move all the particles via brownian motion
             for (int m = 0; m < NUM_PARTICLES; ++m) {
                 for (int n = 0; n < NUM_COLUMNS; ++n) {
@@ -518,7 +509,6 @@ long double ** runSimSimple(long double ** particles, int numFrames) {
             // do collision resolution
             particles = resolveCollisionsSimple(particles, neighbors);
         }
-        std::cout << "movement and collisions done" << endl;
 
         // report the frame as done
         frameCount++;
@@ -530,17 +520,21 @@ long double ** runSimSimple(long double ** particles, int numFrames) {
 
 
 int main() {
+    // start the timer
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    
     // import particle positions 
     long double** particles = importData("initial_particles.txt");
 
-    cout << CELL_WIDTH << endl;
-    cout << CELL_HEIGHT << endl;
-    // std::cout << -1 % 95 << endl;
     // run the sim
-    particles = runSimCell(particles, 1000);
+    particles = runSimSimple(particles, 100);
 
-
+    // export the final particle positions
     exportData(particles, "final_particles.txt");
+
+    // end the timer and print the time elapsed
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
 
     return 0;
 }
