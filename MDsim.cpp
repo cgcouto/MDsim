@@ -30,6 +30,9 @@
 
 // the sig fig problem with exportData
 // sort out the whole needing a constant to initialize the array of vectors at compile time
+// saving the initial particles in the final txt and getting it in the cnt cell
+
+
 
 using namespace std; // so we don't have to put std:: in front of certain things
 
@@ -107,20 +110,22 @@ long double** importData(const char* fileName) {
     Converts the given C++ particle array into a txt file with the given name
     INPUTS:
             particles: 2d array containing particle positions
+            frameNum: the frame number of the data we're saving
             saveName: points to the name of the file you want to save to. must include file extension
 */
-void exportData(long double** particles, const char* saveName) {
-    // open desired file for saving
-    ofstream myfile (saveName);
+void exportData(long double** particles, int frameNum, const char* saveName) {
+    // open desired file for appending data
+    ofstream myfile;
+    myfile.open(saveName, ios_base::app);
 
     if (myfile.is_open()) {
         // add the array data to the file in the proper format
         for (int i = 0; i < NUM_PARTICLES; ++i) {
-            for (int j = 0; j < NUM_COLUMNS-1; ++j) {
-                myfile << to_string(particles[i][j]);
+            for (int j = 0; j < NUM_COLUMNS; ++j) {
+                myfile << to_string(particles[i][j]); // positions in first and second cols
                 myfile << " "; 
             }
-            myfile << std::fixed << particles[i][NUM_COLUMNS-1];
+            myfile << std::fixed << frameNum; // frame number in third column - needed for pos_to_cnt_cell
             myfile << "\n";
         }
         myfile.close();
@@ -438,12 +443,21 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
     INPUTS:
             particles: 2d array containing particle positions
             numFrames: how long you want the simulation to run for
+            savingFrequency: how often you want to save particle positions
+            saveName: the name of the file you want to save into
     OUTPUTS:
             particles: the final particle positions
 */
-long double ** runSimCell(long double ** particles, int numFrames) {
+long double ** runSimCell(long double ** particles, int numFrames, int savingFrequency, const char * saveName) {
+
+    // clear the given txt file of any existing data
+    ofstream ofs;
+    ofs.open(saveName, std::ofstream::out | std::ofstream::trunc);
+    ofs.close();
 
     int frameCount = 0;
+
+    // exportData(particles, frameCount, saveName);
 
     // store our mapping of cells to their neighbors
     int ** neighborMap = buildNeighborMapping();
@@ -468,7 +482,16 @@ long double ** runSimCell(long double ** particles, int numFrames) {
 
         // report the frame as done
         frameCount++;
-        std::cout << "frame " + to_string(frameCount) + " done" << endl;
+
+        // save the frame data if it aligns with the saving frequency
+        if (frameCount % savingFrequency == 0) {
+            exportData(particles, frameCount, saveName);
+            cout << "saved frame " + to_string(frameCount) << endl;
+        } else {
+            cout << "frame " + to_string(frameCount) + " done" << endl;
+        }
+
+        
 
         // save the final neighbor list and cell mapping
         if (frameCount == numFrames) {
@@ -527,10 +550,7 @@ int main() {
     long double** particles = importData("initial_particles.txt");
 
     // run the sim
-    particles = runSimSimple(particles, 100);
-
-    // export the final particle positions
-    exportData(particles, "final_particles.txt");
+    particles = runSimCell(particles, 10, 2, "final_particles.txt");
 
     // end the timer and print the time elapsed
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
