@@ -18,21 +18,22 @@
 // some kind of graphing package for making plots
 // a package for delaunay triangulation/voronoi
 
+
 // things i will need to write in the future
 
 // makeHCP
 // initializeGrains
+// addParticles
 // getNeighborAndPsi6
 // getImage
 // getPsi6Image
+
 
 // things i will need to fix in the future
 
 // the sig fig problem with exportData
 // sort out the whole needing a constant to initialize the array of vectors at compile time
 // saving the initial particles in the final txt and getting it in the cnt cell
-
-
 
 using namespace std; // so we don't have to put std:: in front of certain things
 
@@ -550,7 +551,7 @@ int main() {
     long double** particles = importData("initial_particles.txt");
 
     // run the sim
-    particles = runSimCell(particles, 10, 2, "final_particles.txt");
+    particles = runSimCell(particles, 15000, 10, "final_particles.txt");
 
     // end the timer and print the time elapsed
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
