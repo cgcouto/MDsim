@@ -12,6 +12,7 @@
 #include <array>
 #include <chrono>
 
+
 // packages i will probably need in the future
 
 // OpenCV for visualization
@@ -544,18 +545,27 @@ long double ** runSimSimple(long double ** particles, int numFrames) {
 
 
 int main() {
-    // start the timer
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    
-    // import particle positions 
-    long double** particles = importData("initial_particles.txt");
+    #pragma omp parallel 
+    {
+        # pragma omp for
+        {
+        for (int i = 0; i < 4; ++i) {
+            // start the timer
+            std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+            
+            // import particle positions 
+            long double** particles = importData("initial_particles.txt");
 
-    // run the sim
-    particles = runSimCell(particles, 15000, 10, "final_particles.txt");
+            // run the sim
+            particles = runSimCell(particles, 15000, 10, "final_particles.txt");
 
-    // end the timer and print the time elapsed
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
+            // end the timer and print the time elapsed
+            std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+            std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
 
+        }
+        }
+
+    }
     return 0;
 }
