@@ -8,7 +8,7 @@ Welcome to MDsim! The goal of this project was to translate the original MDsim c
 
 Let's start by walking through how a single frame of sim is formed. The code starts by generating neighbor lists. A neighbor list is a 2D array where each row correspond to the index of a particle in the simulation and the row entries are the particles in the general vicinity of the row particle. These neighbor lists are vital because they make resolving collisions much more efficient. Instead of checking your particle against every other particle in the sim, you only check it against the particles in its neighbor list.
 
-Once we have neighbor lists, we will do ten steps of Brownian motion and collision resolution. Resolving collisions involves going through the neighbor lists, retrieving particle positions, and checking distances. If the distance is less than a particle diameter, the particles must be overlapping, and we give them a slight nudge away from each other to resolve this.
+Once we have neighbor lists, we will do ten steps of Brownian motion and collision resolution. Doing the Brownian motion involves adding some random displacement to each of the particle positions, with the displacement drawn from a normal distribution set by sim parameters. Resolving collisions involves going through the neighbor lists, retrieving particle positions, and checking distances. If the distance is less than a particle diameter, the particles must be overlapping, and we give them a slight nudge away from each other to resolve this.
 
 ## Differences from the MATLAB Version
 
@@ -24,7 +24,6 @@ MATLAB makes it really simple to generate and work with 2D arrays. In C++ it is 
 
 ### Generating Random Numbers
 For these simulations, the Brownian motion is dictated by random numbers drawn on a normal distribution. In MATLAB, we can do this with the function normrnd. In C++, however, getting random numbers takes a bit more work.
-
 
 ### Running Multiple Trials
 
