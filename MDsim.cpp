@@ -13,23 +13,6 @@
 #include <chrono>
 
 
-// packages i will probably need in the future
-
-// OpenCV for visualization
-// some kind of graphing package for making plots
-// a package for delaunay triangulation/voronoi
-
-
-// things i will need to write in the future
-
-// makeHCP
-// initializeGrains
-// addParticles
-// getNeighborAndPsi6
-// getImage
-// getPsi6Image
-
-
 // things i will need to fix in the future
 
 // the sig fig problem with exportData
@@ -39,30 +22,14 @@
 using namespace std; // so we don't have to put std:: in front of certain things
 
 
-// - - - - - SIM PARAMETERS - - - - -
+// - - - - - SIM PARAMETERS - - - - - REPLACE ME WHEN YOU ARE RUNNING SIM
 
 const int PARTICLE_DIAM = 10;
-const int NUM_COLUMNS = 2;
 const int NUM_PARTICLES = 23892; // these three won't be hardcoded once lattice generation is ported
 const long double WIDTH = 1918.6;
 const long double HEIGHT = 1211.742744975187;
 
-// - - - - - IMPORTANT CONSTANTS - - - - -
-
-const long double STEP_SIZE = 0.0050;
-const long double VISCOSITY = 1.99e-3;
-const int TEMPERATURE = 300;
-const long double BOLTZ_CONSTANT = 1.381e-23;
-const long double SCALING_FACTOR = PARTICLE_DIAM/(1.3e-6);
-const long double  SQUIG = (6*M_PI*VISCOSITY*(PARTICLE_DIAM/2))/SCALING_FACTOR;
 const long double NEIGHB_THRESHOLD = 2;
-
-const int MU = 0;
-const long double SIGMA = sqrt((2*BOLTZ_CONSTANT*TEMPERATURE)/SQUIG * STEP_SIZE);
-random_device rd; // creates random integer seed values each time we run
-unsigned int seed = rd(); // put the seed into an int so we can store it if we wish
-mt19937 gen(seed); // generator(seed) - mersenne twister based around 2^(19937)-1 
-normal_distribution <float> d(MU,SIGMA);
 
 // sizes the neighbor cells variably (you'll get slightly different result depending on the sim width/height)
 // should consult with sharon next week before finalizing this...
@@ -72,6 +39,25 @@ const int TABLE_SIZE = 95*60;
 
 const long double CELL_WIDTH = WIDTH/TABLE_WIDTH;
 const long double CELL_HEIGHT = HEIGHT/TABLE_HEIGHT;
+
+
+
+// - - - - - IMPORTANT CONSTANTS - - - - -
+
+const long double STEP_SIZE = 0.0050;
+const long double VISCOSITY = 1.99e-3;
+const int TEMPERATURE = 300;
+const long double BOLTZ_CONSTANT = 1.381e-23;
+const long double SCALING_FACTOR = PARTICLE_DIAM/(1.3e-6);
+const long double  SQUIG = (6*M_PI*VISCOSITY*(PARTICLE_DIAM/2))/SCALING_FACTOR;
+const int NUM_COLUMNS = 2;
+
+const int MU = 0;
+const long double SIGMA = sqrt((2*BOLTZ_CONSTANT*TEMPERATURE)/SQUIG * STEP_SIZE);
+random_device rd; // creates random integer seed values each time we run
+unsigned int seed = rd(); // put the seed into an int so we can store it if we wish
+mt19937 gen(seed); // generator(seed) - mersenne twister based around 2^(19937)-1 
+normal_distribution <float> d(MU,SIGMA);
 
 
 /*
@@ -97,7 +83,7 @@ long double** importData(const char* fileName) {
         int count = 0;
         while(getline(file, data)) {   // get a whole line
             stringstream ss(data);
-            while(getline(ss, data, ',')) { // get each element in the line
+            while(getline(ss, data, ' ')) { // get each element in the line
                 initialParticles[count/NUM_COLUMNS][count % NUM_COLUMNS] = stold(data);
                 count++;
             }
@@ -248,113 +234,6 @@ array<vector<int>,TABLE_SIZE> getNeighborsCell(long double** particles, int** ne
     return neighbors;
 }
 
-/*
-    Creates a neighbor list for the particles using simple means (i.e. not delaunay/voronoi)
-    INPUTS:
-            particles: 2d array containing particle positions
-    OUTPUTS:
-            neighbors: an array of vectors containing relevant array indexes from particles
-*/
-array<vector<int>,NUM_PARTICLES> getNeighborsSimple(long double** particles) {
-    array<vector<int>,NUM_PARTICLES> neighbors;
-    // loop through each row in neighbors and check distances
-    for (int i = 0; i < NUM_PARTICLES; ++i) {
-        for (int j = 0; j < NUM_PARTICLES; ++j) {
-            if (i != j) {
-                long double currentParticle [2] = {particles[i][0], particles[i][1]};
-                long double testParticle [2] = {particles[j][0], particles[j][1]};
-
-                // adjust particles based on wraparound boundary conditions
-                if (testParticle[0] < PARTICLE_DIAM*NEIGHB_THRESHOLD && currentParticle[0] > WIDTH-PARTICLE_DIAM*NEIGHB_THRESHOLD ) {
-                    testParticle[0] += WIDTH;
-                } else if (testParticle[0] > WIDTH-PARTICLE_DIAM*NEIGHB_THRESHOLD  && currentParticle[0] < PARTICLE_DIAM*NEIGHB_THRESHOLD ) {
-                    testParticle[0] -= WIDTH;
-                }
-
-                if (testParticle[1] < PARTICLE_DIAM*NEIGHB_THRESHOLD  && currentParticle[1] > HEIGHT-PARTICLE_DIAM*NEIGHB_THRESHOLD ) {
-                    testParticle[1] += HEIGHT;
-                } else if (testParticle[1] > HEIGHT-PARTICLE_DIAM*NEIGHB_THRESHOLD  && currentParticle[1] < PARTICLE_DIAM*NEIGHB_THRESHOLD ) {
-                    testParticle[1] -= HEIGHT;
-                }
-
-                long double dist = sqrt(pow(currentParticle[0]-testParticle[0],2) + pow(currentParticle[1]-testParticle[1],2));
-
-                if (dist < PARTICLE_DIAM*NEIGHB_THRESHOLD) {
-                    neighbors[i].push_back(j);
-                }
-                    
-            }
-    
-        }
-    }
-
-    return neighbors;
-}
-
-/*
-    Uses the neighbor list to resolve particle collisions
-    INPUTS:
-            particles: 2d array containing particle positions
-            neighbors: array of vectors containing particle indices
-    OUTPUTS:
-            particles: same as input, just with collisions resolved
-*/
-long double ** resolveCollisionsSimple(long double** particles, array<vector<int>,NUM_PARTICLES> neighbors) {
-
-    // loop through the neighbor list to get relevant particle inds
-    for (int i = 0; i < NUM_PARTICLES; ++i) {
-        int centralInd = i;
-        long double centralParticle [2] = {particles[i][0], particles[i][1]};
-        for (int j = 0; j < neighbors[i].size(); ++j) {
-            int neighborInd = neighbors[i][j];
-            long double neighborParticle [2] = {particles[neighborInd][0], particles[neighborInd][1]};
-
-            // adjust particles based on wraparound boundary conditions
-            if (neighborParticle[0] < PARTICLE_DIAM && centralParticle[0] > WIDTH-PARTICLE_DIAM) {
-                neighborParticle[0] += WIDTH;
-            } else if (neighborParticle[0] > WIDTH-PARTICLE_DIAM && centralParticle[0] < PARTICLE_DIAM) {
-                neighborParticle[0] -= WIDTH;
-            }
-
-            if (neighborParticle[1] < PARTICLE_DIAM && centralParticle[1] > HEIGHT-PARTICLE_DIAM) {
-                neighborParticle[1] += HEIGHT;
-            } else if (neighborParticle[1] > HEIGHT-PARTICLE_DIAM && centralParticle[1] < PARTICLE_DIAM) {
-                neighborParticle[1] -= HEIGHT;
-            }
-
-            // get distance between points
-            long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
-            
-            if (dist < PARTICLE_DIAM) {
-                // PUSH THEM BACK
-                long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
-
-                particles[centralInd][0] += r[0];
-                particles[centralInd][1] += r[1];
-                particles[neighborInd][0] -= r[0];
-                particles[neighborInd][1] -= r[1];
-
-            }
-        }
-    }
-
-    // enforce wraparound boundary conditions
-    for (int i = 0; i < NUM_PARTICLES; ++i) {
-        if (particles[i][0] < 0) {
-            particles[i][0] += WIDTH;
-        } else if (particles[i][0] > WIDTH) {
-            particles[i][0] -= WIDTH;
-        }
-
-        if (particles[i][1] < 0) {
-            particles[i][1] += HEIGHT;
-        } else if (particles[i][1] > HEIGHT) {
-            particles[i][1] -= HEIGHT;
-        }
-
-    }
-    return particles;
-}
 
 /*
     Uses the neighbor list to resolve particle collisions
@@ -504,44 +383,7 @@ long double ** runSimCell(long double ** particles, int numFrames, int savingFre
 
 
     return particles;
-}
-
-/*
-    Runs the molecular dynamics simulation with simple neighbor finding - O(N^2)
-    INPUTS:
-            particles: 2d array containing particle positions
-            numFrames: how long you want the simulation to run for
-    OUTPUTS:
-            particles: the final particle positions
-*/
-long double ** runSimSimple(long double ** particles, int numFrames) {
-    int frameCount = 0;
-
-    while (frameCount < numFrames) {
-
-        // get neighbor lists 
-        array<vector<int>,NUM_PARTICLES> neighbors = getNeighborsSimple(particles);
-        
-        for (int i = 0; i < 10; ++i) {
-
-            // move all the particles via brownian motion
-            for (int m = 0; m < NUM_PARTICLES; ++m) {
-                for (int n = 0; n < NUM_COLUMNS; ++n) {
-                    particles[m][n] += d(gen)*SCALING_FACTOR;
-                }
-            }
-
-            // do collision resolution
-            particles = resolveCollisionsSimple(particles, neighbors);
-        }
-
-        // report the frame as done
-        frameCount++;
-        std::cout << "frame " + to_string(frameCount) + " done" << endl;
-    }
-
-    return particles;
-}
+} 
 
 
 int main() {
