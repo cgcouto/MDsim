@@ -16,7 +16,6 @@
 // things i will need to fix in the future
 
 // the sig fig problem with exportData
-// sort out the whole needing a constant to initialize the array of vectors at compile time
 
 using namespace std; // so we don't have to put std:: in front of certain things
 
@@ -33,6 +32,8 @@ const int NEIGHB_THRESHOLD [48] = {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
 const int TABLE_WIDTH [48] = {95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95};
 const int TABLE_HEIGHT [48] = {60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60};
 const int TABLE_SIZE [48] = {5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700};
+const int NUM_FRAMES [48] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+const int SAVING_FREQUENCY [48] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 
 // - - - - - IMPORTANT CONSTANTS - - - - -
@@ -386,7 +387,7 @@ int main() {
                 long double** particles = importData(INITIAL_FILE[i].c_str(), i);
 
                 // run the sim
-                particles = runSim(particles, 10, 100, FINAL_FILE[i].c_str(), i);
+                particles = runSim(particles, NUM_FRAMES[i], SAVING_FREQUENCY[i], FINAL_FILE[i].c_str(), i);
 
                 // end the timer and print the time elapsed
                 std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
