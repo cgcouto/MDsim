@@ -37,7 +37,7 @@ For these simulations, the Brownian motion is dictated by random numbers drawn o
 
 ### Running Multiple Trials
 
-In MATLAB, parallelizing our loops is really easy. We just use parfor and tweak the parallel pool settings as needed. In C++, we need to We could have used pthreads - the built-in solution for multi-threading - but we decided to use OpenMP because it's more flexible and more intuitive to implement. If you want to know more about OpenMP, there's a book in the lab called 'The OpenMP Common Core'. It's a good read - the first two chapters explain the fundamentals of parallel computing really well.
+In MATLAB, parallelizing our loops is really easy. We just use parfor and tweak the parallel pool settings as needed.  In C++, the solutions give us much more control. We could have used pthreads - the built-in solution for multi-threading - but we decided to use OpenMP because it's more flexible and more intuitive to implement. If you want to know more about OpenMP, there's a book in the lab called 'The OpenMP Common Core'. It's a good read - the first two chapters explain the fundamentals of parallel computing really well.
 
 ## Closing Thoughts
 
