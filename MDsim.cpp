@@ -12,13 +12,7 @@
 #include <array>
 #include <chrono>
 
-
-// things i will need to fix in the future
-
-// the sig fig problem with exportData
-
-using namespace std; // so we don't have to put std:: in front of certain things
-
+using namespace std;
 
 // - - - - - SIM PARAMETERS - - - - - REPLACE ME WHEN YOU ARE RUNNING SIM
 
