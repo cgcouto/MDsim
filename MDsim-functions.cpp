@@ -1,52 +1,43 @@
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <sstream>
-#include <iomanip>
-#include <cmath>
 #include <math.h>
-#include <random>
-#include <vector>
 #include <array>
-#include <chrono>
+#include <random>
 
 #include "MDsim-functions.h"
 
-using namespace std;
-
 // - - - - - SIM PARAMETERS - - - - -
 
-const int PARTICLE_DIAM = 10;
-const int NUM_COLUMNS = 2;
-const int NUM_PARTICLES = 23892; // these three won't be hardcoded once lattice generation is ported
-const long double WIDTH = 1918.6;
-const long double HEIGHT = 1211.742744975187;
+const int PARTICLE_DIAM = 10; // diameter of each simulated particles
+const int NUM_COLUMNS = 2; // 
+const int NUM_PARTICLES = 23892; // the number of particles we are simulating
+const long double WIDTH = 1918.6; // exact width of the sim window
+const long double HEIGHT = 1211.742744975187; // exact height of the sim window
 
-// - - - - - IMPORTANT CONSTANTS - - - - -
+const long double STEP_SIZE = 0.0050; // how much time elapsed in each frame (in seconds)
+const long double VISCOSITY = 1.99e-3; // dynamic viscosity of our simulated colloid mixture
+const int TEMPERATURE = 300; // temperature of the simulation (in kelvin)
+const long double BOLTZ_CONSTANT = 1.381e-23; // boltzmann constant (in m^2*kg / s^2*K)
+const long double SCALING_FACTOR = PARTICLE_DIAM/(1.27e-6); // size difference between simulated and real particles
+const long double  SQUIG = (6*M_PI*VISCOSITY*(PARTICLE_DIAM/2))/SCALING_FACTOR; // Fd/v, derived from Stokes' law
+const long double NEIGHB_THRESHOLD = 2; // shapes the size of the neighbor cells
 
-const long double STEP_SIZE = 0.0050;
-const long double VISCOSITY = 1.99e-3;
-const int TEMPERATURE = 300;
-const long double BOLTZ_CONSTANT = 1.381e-23;
-const long double SCALING_FACTOR = PARTICLE_DIAM/(1.3e-6);
-const long double  SQUIG = (6*M_PI*VISCOSITY*(PARTICLE_DIAM/2))/SCALING_FACTOR;
-const long double NEIGHB_THRESHOLD = 2;
-
-const int MU = 0;
+const int MU = 0; // a variable in our normal distribution
 const long double SIGMA = sqrt((2*BOLTZ_CONSTANT*TEMPERATURE)/SQUIG * STEP_SIZE);
 random_device rd; // creates random integer seed values each time we run
-unsigned int seed = rd(); // put the seed into an int so we can store it if we wish
+unsigned int seed = rd(); // puts the seed into an int so we can store it if we wish
 mt19937 gen(seed); // generator(seed) - mersenne twister based around 2^(19937)-1 
-normal_distribution <float> d(MU,SIGMA);
+normal_distribution <float> d(MU,SIGMA); // plugs random numbers into normal distribution to move particles
 
 // sizes the neighbor cells variably (you'll get slightly different result depending on the sim width/height)
-// should consult with sharon next week before finalizing this...
-const int TABLE_WIDTH = static_cast<int> (floor(WIDTH/(PARTICLE_DIAM*NEIGHB_THRESHOLD)));
-const int TABLE_HEIGHT = static_cast<int> (floor(HEIGHT/(PARTICLE_DIAM*NEIGHB_THRESHOLD)));
+const int TABLE_WIDTH = static_cast<int> (floor(WIDTH/(PARTICLE_DIAM*NEIGHB_THRESHOLD))); // no. of cells horizontally
+const int TABLE_HEIGHT = static_cast<int> (floor(HEIGHT/(PARTICLE_DIAM*NEIGHB_THRESHOLD))); // no. of cells vertically
+
+ // just TABLE_WIDTH * TABLE_HEIGHT, but must be valued at compile time to size arrays of vectors
 const int TABLE_SIZE = 95*60;
 
-const long double CELL_WIDTH = WIDTH/TABLE_WIDTH;
-const long double CELL_HEIGHT = HEIGHT/TABLE_HEIGHT;
+// - - - - - SIM FUNCTIONS - - - - -
 
 /*
     Translates a MATLAB 2D particle array (that is saved via writematrix)
@@ -167,6 +158,8 @@ void exportMapping(int** neighborMapping, const char* saveName) {
 
 /*
     Creates and stores the neighbors of each cell so we can access their indices in constant time
+    Imagine a checkerboard where each square has an id - for each square we want to log the id's of its eight
+    surrounding squares
     OUTPUTS:
             neighborMapping: a 2d array of ints that stores the neighbors of each cell
 */
@@ -181,17 +174,22 @@ int ** buildNeighborMapping() {
     for (int m = 0; m < TABLE_WIDTH; ++m) {
         for (int n = 0; n < TABLE_HEIGHT; ++n) {
 
-            int tableIndex = m + TABLE_WIDTH * n;
+            int tableIndex = m + TABLE_WIDTH * n; // index of current cell
+
             // do our mapping and encode it in indices
             // the ninth neighbor (itself) is implied by the tableIndex
             neighborMapping[tableIndex][0] = ((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) + TABLE_WIDTH*n;
             neighborMapping[tableIndex][1] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*n;
             neighborMapping[tableIndex][2] = m + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
             neighborMapping[tableIndex][3] = m + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
-            neighborMapping[tableIndex][4] = (((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
-            neighborMapping[tableIndex][5] = (((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
-            neighborMapping[tableIndex][6] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
-            neighborMapping[tableIndex][7] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][4] = (((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) % TABLE_WIDTH) 
+                                            + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][5] = (((TABLE_WIDTH + ((m-1))) % TABLE_WIDTH) % TABLE_WIDTH) 
+                                            + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][6] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) 
+                                            + TABLE_WIDTH*(((TABLE_HEIGHT + ((n-1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
+            neighborMapping[tableIndex][7] = (((TABLE_WIDTH + ((m+1))) % TABLE_WIDTH) % TABLE_WIDTH) 
+                                            + TABLE_WIDTH*(((TABLE_HEIGHT + ((n+1))) % TABLE_HEIGHT) % TABLE_HEIGHT);
         }
     }
 
@@ -200,19 +198,20 @@ int ** buildNeighborMapping() {
 
 /*
     Creates a neighbor list for the particles using the cell list method
+    Find and store which cell each particle is in
     INPUTS:
             particles: 2d array containing particle positions
             neighborMapping: 2d array storing the neighbors of each cell
     OUTPUTS:
             neighbors: an array of vectors containing relevant array indexes from particles that fit in each cell
 */
-array<vector<int>,TABLE_SIZE> getNeighborsCell(long double** particles, int** neighborMapping) {
+array<vector<int>,TABLE_SIZE> getNeighbors(long double** particles, int** neighborMapping) {
     array<vector<int>,TABLE_SIZE> neighbors;
 
     for (int i = 0; i < NUM_PARTICLES; ++i) {
         // get the position of the cell the particle is in
-        int tableX = static_cast<int> (floor(particles[i][0] / CELL_WIDTH));
-        int tableY = static_cast<int> (floor(particles[i][1] / CELL_HEIGHT));
+        int tableX = static_cast<int> (floor(particles[i][0] / (WIDTH/TABLE_WIDTH)));
+        int tableY = static_cast<int> (floor(particles[i][1] / (HEIGHT/TABLE_HEIGHT)));
         
         // translate position to index and add to vector
         neighbors[tableX + TABLE_WIDTH*tableY].push_back(i);
@@ -230,7 +229,7 @@ array<vector<int>,TABLE_SIZE> getNeighborsCell(long double** particles, int** ne
     OUTPUTS:
             particles: same as input, just with collisions resolved
 */
-long double ** resolveCollisionsCell(long double** particles, array<vector<int>,TABLE_SIZE> neighbors, int** neighborMapping) {
+long double ** resolveCollisions(long double** particles, array<vector<int>,TABLE_SIZE> neighbors, int** neighborMapping) {
     
     // go through all the indices in the neighbor list (size is equal to NUM_PARTICLES)
     for (int i = 0; i < TABLE_SIZE; ++i) {
@@ -270,12 +269,14 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
                         }
 
                         // get distance between points
-                        long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
+                        long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) 
+                                               + pow(centralParticle[1]-neighborParticle[1],2));
 
+                        // if the particles are overlapping, repel them so they no longer intersect
                         if (dist < PARTICLE_DIAM) {
 
-                            // PUSH THEM BACK
-                            long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
+                            long double r [2] = {((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), 
+                                                 ((PARTICLE_DIAM-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
 
                             particles[centralInd][0] += r[0];
                             particles[centralInd][1] += r[1];
@@ -307,7 +308,7 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
 }
 
 /*
-    Runs the molecular dynamics simulation with cell lists - O(N)
+    Runs the molecular dynamics simulation with cell lists
     INPUTS:
             particles: 2d array containing particle positions
             numFrames: how long you want the simulation to run for
@@ -316,7 +317,7 @@ long double ** resolveCollisionsCell(long double** particles, array<vector<int>,
     OUTPUTS:
             particles: the final particle positions
 */
-long double ** runSimCell(long double ** particles, int numFrames, int savingFrequency, const char * saveName) {
+long double ** runSim(long double ** particles, int numFrames, int savingFrequency, const char * saveName) {
 
     // clear the given txt file of any existing data
     ofstream ofs;
@@ -325,15 +326,13 @@ long double ** runSimCell(long double ** particles, int numFrames, int savingFre
 
     int frameCount = 0;
 
-    // exportData(particles, frameCount, saveName);
-
     // store our mapping of cells to their neighbors
     int ** neighborMap = buildNeighborMapping();
     array<vector<int>,TABLE_SIZE> neighbors;
 
     while (frameCount < numFrames) {
         // get neighbor lists 
-        neighbors = getNeighborsCell(particles, neighborMap);
+        neighbors = getNeighbors(particles, neighborMap);
         
         for (int i = 0; i < 10; ++i) {
            
@@ -345,7 +344,7 @@ long double ** runSimCell(long double ** particles, int numFrames, int savingFre
             }
 
             // do collision resolution
-            particles = resolveCollisionsCell(particles, neighbors, neighborMap);
+            particles = resolveCollisions(particles, neighbors, neighborMap);
         }
 
         // report the frame as done
@@ -373,17 +372,15 @@ long double ** runSimCell(long double ** particles, int numFrames, int savingFre
     return particles;
 }
 
-
-long double ** doOneFrame(long double ** particles, const char * saveName) {
-
-    // clear the given txt file of any existing data
-    ofstream ofs;
-    ofs.open(saveName, std::ofstream::out | std::ofstream::trunc);
-    ofs.close();
-
-    int frameCount = 0;
-
-    // exportData(particles, frameCount, saveName);
+/*
+    Runs one frame of the molecular dynamics simulation
+    Ideal for real-time visualization in a render loop
+    INPUTS:
+            particles: 2d array containing particle positions
+    OUTPUTS:
+            particles: the updated particle positions
+*/
+long double ** doOneFrame(long double ** particles) {
 
     // store our mapping of cells to their neighbors
     int ** neighborMap = buildNeighborMapping();
@@ -391,7 +388,7 @@ long double ** doOneFrame(long double ** particles, const char * saveName) {
 
 
     // get neighbor lists 
-     neighbors = getNeighborsCell(particles, neighborMap);
+     neighbors = getNeighbors(particles, neighborMap);
         
     for (int i = 0; i < 10; ++i) {
            
@@ -403,16 +400,8 @@ long double ** doOneFrame(long double ** particles, const char * saveName) {
         }
 
         // do collision resolution
-        particles = resolveCollisionsCell(particles, neighbors, neighborMap);
+        particles = resolveCollisions(particles, neighbors, neighborMap);
     }
-
-    // report the frame as done
-    frameCount++;
-
-
-    exportData(particles, frameCount, saveName);
-    cout << "saved frame " + to_string(frameCount) << endl;
-
 
     return particles;
 }

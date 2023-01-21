@@ -1,24 +1,15 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <iomanip>
-#include <cmath>
-#include <math.h>
-#include <random>
-#include <vector>
-#include <array>
-
 #include "wx/sizer.h"
 #include "wx/wx.h"
 
 #include "MDsim-functions.h"
 
-// This render loop is heavily based on code found here: https://wiki.wxwidgets.org/Making_a_render_loop
+// this render loop is heavily based on code found here: https://wiki.wxwidgets.org/Making_a_render_loop
 
-using namespace std;
-
+// store particle positions to be updated and rendered
 long double ** currentParticles = importData("initial_particles.txt");
+
+// scales the sim visualization to make it fit better on one screen
+const double PICTURE_SCALE = 1.5;
 
 class BasicDrawPane : public wxPanel
 {
@@ -53,7 +44,8 @@ IMPLEMENT_APP(MyApp)
 class MyFrame : public wxFrame
 {
 public:
-    MyFrame() : wxFrame((wxFrame *)NULL, -1,  wxT("Hello wxDC"), wxPoint(50,50), wxSize(400,200))
+    MyFrame() : wxFrame((wxFrame *)NULL, -1,  wxT("MDSimApp"), wxPoint(50,50), 
+                        wxSize(WIDTH/PICTURE_SCALE,HEIGHT/PICTURE_SCALE))
     {
     }
     void onClose(wxCloseEvent& evt)
@@ -135,10 +127,12 @@ void BasicDrawPane::paintNow()
 
 void BasicDrawPane::render( wxDC& dc )
 {
-    currentParticles = doOneFrame(currentParticles, "final_particles.txt");
-    dc.SetBrush(*wxBLUE_BRUSH); 
-    // dc.SetPen( wxPen( wxColor(0,0,255), 0 ) ); // 5-pixels-thick red outline
+    currentParticles = doOneFrame(currentParticles); // update the particle positions
+    dc.SetBrush(*wxBLUE_BRUSH);
+
+    // render each particle 
     for (int i = 0; i < NUM_PARTICLES; ++i) {
-        dc.DrawCircle( wxPoint(currentParticles[i][0],currentParticles[i][1]), PARTICLE_DIAM/2 /* radius */ );
+        dc.DrawCircle( wxPoint(currentParticles[i][0]/PICTURE_SCALE,currentParticles[i][1]/PICTURE_SCALE), 
+                      (PARTICLE_DIAM/2)/PICTURE_SCALE);
     }
 }
