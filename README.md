@@ -1,12 +1,24 @@
 # MDsim
 
+## NEW: MDSimApp!
+
+Thanks to this new visualization branch you can now view simulation results in real time! This feature was implemented using the wxwidgets GUI library. As long as you have wxwidgets installed and wx-config is on your system-wide repository (I did this through a make install) the Makefile should let you build and run the app.
+
+Some future goals for this project (which will be done in the visualization-dev branch for now):
+
+* Rewrite initial particle configuration code in C++, which would remove the need for txt files
+* Use the wxWindow and wxButton classes to let the user adjust the size of the sim window, angle of the particles, particle spacing, and more
+* Allow the user to draw the borders of the subgrain shape they wish to simulate
+
+The following paragraphs go into detail on the original scope of the MDsim project, currently found in the main branch of the repo. Read on if you're curious...
+
 ## Introduction
 
-Welcome to MDsim! The goal of this project was to translate the original MDsim code from MATLAB to C++ to improve sim performance. It was written during the summer of 2022. These simulations function similarly to MDsim in MATLAB, but the implementations differ in a few choice areas.
+Welcome to MDsim! The goal of this project was to translate the original MDsim code from MATLAB to C++ to improve sim performance. It was written during the summer of 2022. These simulations function similarly to our MDsim class in MATLAB, but the implementations differ in a few choice areas. 
 
 ## Overview
 
-Let's start by walking through how a single frame of sim is formed. The code starts by generating neighbor lists. A neighbor list is a 2D array where each row correspond to the index of a particle in the simulation and the row entries are the particles in the general vicinity of the row particle. These neighbor lists are vital because they make resolving collisions much more efficient. Instead of checking your particle against every other particle in the sim, you only check it against the particles in its neighbor list.
+Let's start by walking through how a single frame of sim is formed. The code starts by generating neighbor lists. A neighbor list stores (in some form) which other particles are 'close enough' to each particle in the simulation. These neighbor lists are vital because they make resolving collisions much more efficient. Instead of checking your particle against every other particle in the sim, you only check it against the particles in its neighbor list.
 
 Once we have neighbor lists, we will do ten steps of Brownian motion and collision resolution. Doing the Brownian motion involves adding some random displacement to each of the particle positions, with the displacement drawn from a normal distribution set by sim parameters. Resolving collisions involves going through the neighbor lists, retrieving particle positions, and checking distances. If the distance is less than a particle diameter, the particles must be overlapping, and we give them a slight nudge away from each other to resolve this.
 
@@ -18,7 +30,7 @@ To start, you're going to want to run the 'importIntoC.m' script over in MATLAB.
 
 From here, copy the lines of C++ code produced by the MATLAB script and open MDsim.cpp with your IDE of choice. Once you're there, replace the lines at the top of the code with what you've copied. This is all you need to change in the code! Now you should compile the C++ code in the terminal with the command g++ -o  mdsim MDsim.cpp -fopenmp . From there, it's as simple as running the executable with ./mdsim.
 
-Finally, to read in the plist txt files and create cnt cells in the labelled folders. Make sure that the sim info at the top of the script matches that from 'importIntoC.m'. 
+Finally, to read in the plist txt files and create cnt cells in the labelled folders, use the 'exportOutOfC.m' MATLAB script. Make sure that the sim info at the top of the script matches that from 'importIntoC.m'. 
 
 ## Differences from the MATLAB Version
 
@@ -26,14 +38,15 @@ Finally, to read in the plist txt files and create cnt cells in the labelled fol
 
 As discussed in the overview, building neighbor lists is a crucial part of these molecular dynamics simulations. In MATLAB we loop through each of the particles and use logical indexing to get all the particles neighbor threshold. We do not have logical indexing in C++, so building neighbor lists efficiently demands a different approach. 
 
-As a result, we've implemented cell lists. The Wikipedia page does a good job explaining how it works, but the gist is that we partition the 2D sim space into cells. Before we run the sim, we need to Having this stored in an array allows us to access this information quickly and not waste time calculating it again. 
+As a result, we've implemented cell lists. [The Wikipedia page](https://en.wikipedia.org/wiki/Cell_lists) does a good job explaining how it works, but the gist is that we partition the 2D sim space into rectangular cells. Before we run the sim, we give each cell a corresponding integer id and store a mapping between each cell and eight cells surrounding it. Having this stored in an array allows us to access this information quickly and not waste time calculating it again. To find neighboring particles, we first store which cell each particle resides in, which is a pretty speedy process thanks to how we've id'd our cells. To get a particle's neighbors during collision resolution, we find what cell it's in, use the cell mapping to obtain the eight bordering cells, then retrieve all the particles in those eight bordering cells, plus the other particles in the current cell. This process runs in linear time (in relation to the number of particles in the simulation)!
 
 ### Data Structures
 
-MATLAB makes it really simple to generate and work with 2D arrays. In C++ it is much Once they are created, working with 2D arrays in C++ is similar to MATLAB. Just remember that your indices start at 0, not 1! The neighbor information is stored in a vector of vectors. Ideally we would use an array of vectors - . We only use a bit more memory with this vector of vectors approach, the performance is the same.
+MATLAB makes it really simple to generate and work with 2D arrays. In C++ it is a bit more challenging because we need to use pointer logic to store it on the heap: we'll have a pointer that points to an array of pointers, with each pointer in that array directing to a row in our 2d table. Once they are created, working with 2D arrays in C++ is similar to MATLAB. Just remember that your indices start at 0, not 1!
 
-### Generating Random Numbers
-For these simulations, the Brownian motion is dictated by random numbers drawn on a normal distribution. In MATLAB, we can do this with the function normrnd. In C++, however, getting random numbers takes a bit more work.
+### Generating Pseudo-Random Numbers
+
+For these simulations, the Brownian motion is dictated by random numbers drawn on a normal distribution. In MATLAB, we can do this with the function normrnd. In C++, however, getting random numbers takes a bit more work. We seed our random-number generator (in our case a Mersenne twister) using another pseudo-random number drawn using the random_device library. To place our results on a normal distribution, we use the normal_distribution library. While more involved, this process goes to show you how complex pseudo-random number generation is under the hood!
 
 ### Running Multiple Trials
 
