@@ -13,11 +13,7 @@
 #include <chrono>
 
 
-// things i will need to fix in the future
-
-// the sig fig problem with exportData
-
-using namespace std; // so we don't have to put std:: in front of certain things
+using namespace std;
 
 
 // - - - - - SIM PARAMETERS - - - - - REPLACE ME WHEN YOU ARE RUNNING SIM
@@ -34,9 +30,6 @@ const int TABLE_HEIGHT [48] = {60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 6
 const int TABLE_SIZE [48] = {5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700, 5700};
 const int NUM_FRAMES [48] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 const int SAVING_FREQUENCY [48] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-
-// - - - - - IMPORTANT CONSTANTS - - - - -
 
 
 /*
@@ -158,6 +151,8 @@ void exportMapping(int** neighborMapping, const char* saveName, int trialNum) {
 
 /*
     Creates and stores the neighbors of each cell so we can access their indices in constant time
+    Imagine a checkerboard where each square has an id - for each square we want to log the id's of its eight
+    surrounding squares
     OUTPUTS:
             neighborMapping: a 2d array of ints that stores the neighbors of each cell
 */
@@ -191,6 +186,7 @@ int ** buildNeighborMapping(int trialNum) {
 
 /*
     Creates a neighbor list for the particles using the cell list method
+    Find and store which cell each particle is in
     INPUTS:
             particles: 2d array containing particle positions
             neighborMapping: 2d array storing the neighbors of each cell
@@ -264,9 +260,9 @@ long double ** resolveCollisions(long double** particles, vector<vector<int>> ne
                         // get distance between points
                         long double dist = sqrt(pow(centralParticle[0]-neighborParticle[0],2) + pow(centralParticle[1]-neighborParticle[1],2));
 
+                        // if the particles are overlapping, repel them so they no longer intersect
                         if (dist < PARTICLE_DIAM[trialNum]) {
-
-                            // PUSH THEM BACK
+                            
                             long double r [2] = {((PARTICLE_DIAM[trialNum]-dist)/2)*(1/dist)*(centralParticle[0]-neighborParticle[0]), ((PARTICLE_DIAM[trialNum]-dist)/2)*(1/dist)*(centralParticle[1]-neighborParticle[1])};
 
                             particles[centralInd][0] += r[0];
@@ -322,7 +318,7 @@ long double ** runSim(long double ** particles, int numFrames, int savingFrequen
     const long double VISCOSITY = 1.99e-3;
     const int TEMPERATURE = 300;
     const long double BOLTZ_CONSTANT = 1.381e-23;
-    const long double SCALING_FACTOR = PARTICLE_DIAM[trialNum]/(1.3e-6);
+    const long double SCALING_FACTOR = PARTICLE_DIAM[trialNum]/(1.27e-6);
     const long double  SQUIG = (6*M_PI*VISCOSITY*(PARTICLE_DIAM[trialNum]/2))/SCALING_FACTOR;
 
     const int MU = 0;
@@ -331,8 +327,6 @@ long double ** runSim(long double ** particles, int numFrames, int savingFrequen
     unsigned int seed = rd(); // put the seed into an int so we can store it if we wish
     mt19937 gen(seed); // generator(seed) - mersenne twister based around 2^(19937)-1 
     normal_distribution <float> d(MU,SIGMA);
-
-    // exportData(particles, frameCount, saveName);
 
     // store our mapping of cells to their neighbors
     int ** neighborMap = buildNeighborMapping(trialNum);
